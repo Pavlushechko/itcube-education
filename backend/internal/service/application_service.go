@@ -39,6 +39,19 @@ func (s *ApplicationService) Create(ctx context.Context, groupID uuid.UUID, comm
 		return uuid.Nil, errors.New("unauthorized")
 	}
 
+	// ✅ запрет: учитель не может подавать заявку на СВОЙ курс
+	pid, err := s.catalogRepo.GetGroupProgramID(ctx, groupID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	isTeacher, err := s.catalogRepo.IsTeacherInProgram(ctx, userID, pid)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if isTeacher {
+		return uuid.Nil, errors.New("teacher cannot apply to own program")
+	}
+
 	published, open, err := s.catalogRepo.IsGroupAvailableForApply(ctx, groupID)
 	if err != nil {
 		return uuid.Nil, err

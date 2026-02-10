@@ -141,4 +141,15 @@ export const api = {
       }),
     }),
 
+  getProgramPrivate: (id: string) => request<any>(`/programs/${id}`),
+
+  updateProgram: (programId: string, patch: { title?: string; description?: string }) =>
+    request<void>(`/admin/programs/${programId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  teacherProgramAccess: (programId: string) =>
+    request<{ ok: boolean }>(`/teacher/programs/${programId}/access`),
+
 }

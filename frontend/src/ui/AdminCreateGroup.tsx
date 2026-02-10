@@ -15,10 +15,19 @@ export function AdminCreateGroup({ programId, onDone }: { programId: string; onD
   async function create() {
     setErr('')
     setBusy(true)
+
     try {
-      // MVP: всегда создаём cohort (можно потом сделать “выбрать существующий”)
       const c = await api.createCohort(programId, year)
-      await api.createGroup(programId, c.id, title, capacity, requiresInterview, isOpen)
+
+      await api.createGroup({
+        programId,
+        cohortId: c.id,
+        title,
+        capacity,
+        requiresInterview,
+        isOpen,
+      })
+
       alert('Группа создана')
       onDone()
     } catch (e: any) {
@@ -27,6 +36,7 @@ export function AdminCreateGroup({ programId, onDone }: { programId: string; onD
       setBusy(false)
     }
   }
+
 
   return (
     <div style={{ marginTop: 12, padding: 10, border: '1px solid #ddd', borderRadius: 6, maxWidth: 720 }}>

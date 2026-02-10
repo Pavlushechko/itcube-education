@@ -39,6 +39,10 @@ func (s *InterviewService) Record(ctx context.Context, appID uuid.UUID, result d
 		return err
 	}
 
+	if app.Status != domain.AppInReview {
+		return errors.New("interview can be recorded only when application is in_review")
+	}
+
 	// admin/moderator always; otherwise must be assigned teacher
 	if role != "admin" && role != "moderator" {
 		assigned, err := s.catalogRepo.IsTeacherInGroup(ctx, app.GroupID, actorID)

@@ -5,6 +5,7 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -110,7 +111,12 @@ func (h *TeacherHandler) RecordInterview(w http.ResponseWriter, r *http.Request)
 
 	res := domain.InterviewResult(req.Result)
 	if err := h.interviews.Record(r.Context(), appID, res, req.Comment); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		msg := err.Error()
+		if strings.Contains(msg, "teacher is not assigned") || strings.Contains(msg, "forbidden") {
+			http.Error(w, msg, http.StatusForbidden)
+			return
+		}
+		http.Error(w, msg, http.StatusBadRequest)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -156,4 +162,27 @@ func (h *TeacherHandler) GroupStudents(w http.ResponseWriter, r *http.Request) {
 		"group_id": gid.String(),
 		"students": users,
 	})
+}
+
+func (h *TeacherHandler) ProgramAccess(w http.ResponseWriter, r *http.Request) {
+	uid, ok := auth.UserID(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	pid, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	// важно: без 403. просто ok=false если не назначен.
+	allowed, err := h.catalog.IsTeacherInProgram(r.Context(), uid, pid)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": allowed})
 }

@@ -19,17 +19,17 @@ func NewCatalogRepo(db *pgxpool.Pool) *CatalogRepo { return &CatalogRepo{db: db}
 
 func (r *CatalogRepo) ListPublishedPrograms(ctx context.Context) ([]domain.Program, error) {
 	rows, err := r.db.Query(ctx, `
-		select id, title, description, status, created_at
-		from programs
-		where status='published'
-		order by created_at desc
-	`)
+    select id, title, description, status, created_at
+    from programs
+    where status='published'
+    order by created_at desc
+  `)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var res []domain.Program
+	res := make([]domain.Program, 0)
 	for rows.Next() {
 		var p domain.Program
 		var st string
@@ -120,18 +120,18 @@ func (r *CatalogRepo) IsTeacherInGroup(ctx context.Context, groupID, teacherID u
 
 func (r *CatalogRepo) ListTeacherGroups(ctx context.Context, teacherID uuid.UUID) ([]domain.Group, error) {
 	rows, err := r.db.Query(ctx, `
-		select g.id, g.program_id, g.cohort_id, g.title, g.capacity, g.is_open, g.requires_interview, g.created_at
-		from group_teachers gt
-		join groups g on g.id=gt.group_id
-		where gt.teacher_user_id=$1
-		order by g.created_at desc
-	`, teacherID)
+    select g.id, g.program_id, g.cohort_id, g.title, g.capacity, g.is_open, g.requires_interview, g.created_at
+    from group_teachers gt
+    join groups g on g.id=gt.group_id
+    where gt.teacher_user_id=$1
+    order by g.created_at desc
+  `, teacherID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var res []domain.Group
+	res := make([]domain.Group, 0)
 	for rows.Next() {
 		var g domain.Group
 		if err := rows.Scan(&g.ID, &g.ProgramID, &g.CohortID, &g.Title, &g.Capacity, &g.IsOpen, &g.RequiresInterview, &g.CreatedAt); err != nil {
@@ -298,4 +298,139 @@ func (r *CatalogRepo) UpdateGroup(ctx context.Context, groupID uuid.UUID, title 
 		where id=$1
 	`, groupID, title, capacity, isOpen, requiresInterview)
 	return err
+}
+
+// Program without "published only" restriction (for staff view)
+func (r *CatalogRepo) GetProgram(ctx context.Context, programID uuid.UUID) (domain.Program, error) {
+	row := r.db.QueryRow(ctx, `
+		select id, title, description, status, created_at
+		from programs
+		where id=$1
+	`, programID)
+
+	var p domain.Program
+	var st string
+	if err := row.Scan(&p.ID, &p.Title, &p.Description, &st, &p.CreatedAt); err != nil {
+		return domain.Program{}, err
+	}
+	p.Status = domain.ProgramStatus(st)
+	return p, nil
+}
+
+func (r *CatalogRepo) ListCohortsByProgram(ctx context.Context, programID uuid.UUID) ([]domain.Cohort, error) {
+	rows, err := r.db.Query(ctx, `
+		select id, program_id, year, created_at
+		from cohorts
+		where program_id=$1
+		order by year desc
+	`, programID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make([]domain.Cohort, 0)
+	for rows.Next() {
+		var c domain.Cohort
+		if err := rows.Scan(&c.ID, &c.ProgramID, &c.Year, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, c)
+	}
+	return res, rows.Err()
+}
+
+func (r *CatalogRepo) ListGroupsByProgram(ctx context.Context, programID uuid.UUID) ([]domain.Group, error) {
+	rows, err := r.db.Query(ctx, `
+		select id, program_id, cohort_id, title, capacity, is_open, requires_interview, created_at
+		from groups
+		where program_id=$1
+		order by created_at desc
+	`, programID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make([]domain.Group, 0)
+	for rows.Next() {
+		var g domain.Group
+		if err := rows.Scan(&g.ID, &g.ProgramID, &g.CohortID, &g.Title, &g.Capacity, &g.IsOpen, &g.RequiresInterview, &g.CreatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, g)
+	}
+	return res, rows.Err()
+}
+
+// teacher = назначение, не роль
+func (r *CatalogRepo) ListTeacherGroupsByProgram(ctx context.Context, teacherID, programID uuid.UUID) ([]domain.Group, error) {
+	rows, err := r.db.Query(ctx, `
+		select g.id, g.program_id, g.cohort_id, g.title, g.capacity, g.is_open, g.requires_interview, g.created_at
+		from group_teachers gt
+		join groups g on g.id = gt.group_id
+		where gt.teacher_user_id=$1 and g.program_id=$2
+		order by g.created_at desc
+	`, teacherID, programID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make([]domain.Group, 0)
+	for rows.Next() {
+		var g domain.Group
+		if err := rows.Scan(&g.ID, &g.ProgramID, &g.CohortID, &g.Title, &g.Capacity, &g.IsOpen, &g.RequiresInterview, &g.CreatedAt); err != nil {
+			return nil, err
+		}
+		res = append(res, g)
+	}
+	return res, rows.Err()
+}
+
+func (r *CatalogRepo) UpdateProgram(ctx context.Context, id uuid.UUID, title *string, desc *string) error {
+	_, err := r.db.Exec(ctx, `
+		update programs
+		set
+			title = coalesce($2, title),
+			description = coalesce($3, description)
+		where id=$1
+	`, id, title, desc)
+	return err
+}
+
+func (r *CatalogRepo) GetCohortByProgramYear(ctx context.Context, programID uuid.UUID, year int) (domain.Cohort, bool, error) {
+	row := r.db.QueryRow(ctx, `
+		select id, program_id, year, created_at
+		from cohorts
+		where program_id=$1 and year=$2
+	`, programID, year)
+
+	var c domain.Cohort
+	if err := row.Scan(&c.ID, &c.ProgramID, &c.Year, &c.CreatedAt); err != nil {
+		// no rows
+		return domain.Cohort{}, false, nil
+	}
+	return c, true, nil
+}
+
+// true если teacher назначен хотя бы на одну группу этой программы
+func (r *CatalogRepo) IsTeacherInProgram(ctx context.Context, teacherID, programID uuid.UUID) (bool, error) {
+	row := r.db.QueryRow(ctx, `
+		select exists(
+			select 1
+			from group_teachers gt
+			join groups g on g.id = gt.group_id
+			where gt.teacher_user_id=$1 and g.program_id=$2
+		)
+	`, teacherID, programID)
+
+	var ok bool
+	return ok, row.Scan(&ok)
+}
+
+func (r *CatalogRepo) GetGroupProgramID(ctx context.Context, groupID uuid.UUID) (uuid.UUID, error) {
+	row := r.db.QueryRow(ctx, `select program_id from groups where id=$1`, groupID)
+	var pid uuid.UUID
+	return pid, row.Scan(&pid)
 }

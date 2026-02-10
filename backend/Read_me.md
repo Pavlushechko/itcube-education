@@ -46,3 +46,13 @@ Invoke-RestMethod -Method Get -Uri "http://127.0.0.1:8080/learn/groups/$($g.id)/
 "OK. program=$($p.id) cohort=$($c.id) group=$($g.id) app=$($app.id)"
 
 `
+
+сбросить все таблицы(ввод в powershell)
+
+`
+$env:DATABASE_URL = "postgres://education:education@127.0.0.1:55432/education?sslmode=disable"
+make reset-db DATABASE_URL=$env:DATABASE_URL
+
+make reset-db
+
+`

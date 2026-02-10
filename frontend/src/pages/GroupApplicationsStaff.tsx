@@ -1,17 +1,28 @@
 // src/pages/GroupApplicationsStaff.tsx
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
 
 type Row = {
   ID: string
   UserID: string
   GroupID: string
+
+  ProgramID: string
+  ProgramTitle: string
+  GroupTitle: string
+
   Status: string
   Comment: string
   CreatedAt: string
+
+  InterviewResult?: string | null
+  InterviewComment?: string | null
+  InterviewByRole?: string | null
+  InterviewAt?: string | null
 }
+
 
 const NEXT: Record<string, { label: string; status: string }[]> = {
   submitted: [{ label: 'В работу', status: 'in_review' }],
@@ -34,7 +45,7 @@ export function GroupApplicationsStaff() {
     if (!groupId) return
     try {
       setErr('')
-      const data = await api.listApplications(groupId, filter || undefined)
+      const data = await api.listApplications({ groupId, status: filter || undefined })
       setItems(data)
     } catch (e: any) {
       setErr(e.message || String(e))
@@ -49,18 +60,18 @@ export function GroupApplicationsStaff() {
       await api.changeApplicationStatus(appId, to, reason)
       await reload()
     } catch (e: any) {
-    const msg = e.message || String(e)
+      const msg = e.message || String(e)
 
-    if (msg.includes('interview result is required') || msg.includes('ErrInterviewRequired')) {
+      if (msg.includes('interview result is required') || msg.includes('ErrInterviewRequired')) {
         alert('Нельзя одобрить: нужно зафиксировать интервью (recommended) по этой заявке.')
         return
-    }
-    if (msg.includes('interview is not recommended') || msg.includes('ErrInterviewFailed')) {
+      }
+      if (msg.includes('interview is not recommended') || msg.includes('ErrInterviewFailed')) {
         alert('Нельзя одобрить: интервью НЕ рекомендовано.')
         return
-    }
+      }
 
-    alert(msg)
+      alert(msg)
     }
   }
 
@@ -98,6 +109,8 @@ export function GroupApplicationsStaff() {
             <tr key={a.ID} style={{ borderTop: '1px solid #eee' }}>
               <td>{a.ID}</td>
               <td>{a.UserID}</td>
+              <td>{a.ProgramTitle} ({a.ProgramID})</td>
+              <td>{a.GroupTitle} ({a.GroupID})</td>
               <td><b>{a.Status}</b></td>
               <td>{a.Comment}</td>
               <td>
@@ -106,6 +119,10 @@ export function GroupApplicationsStaff() {
                     {btn.label}
                   </button>
                 ))}
+
+                {a.Status === 'in_review' ? (
+                  <Link to={`/teacher/applications/${a.ID}/interview`}>Интервью</Link>
+                ) : null}
               </td>
             </tr>
           ))}

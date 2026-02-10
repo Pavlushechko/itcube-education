@@ -11,6 +11,10 @@ import { TeacherGroups } from '../pages/TeacherGroups'
 import { TeacherGroupStudents } from '../pages/TeacherGroupStudents'
 import { TeacherGroupManage } from '../pages/TeacherGroupManage'
 import { GroupApplicationsStaff } from '../pages/GroupApplicationsStaff.tsx'
+import { ProgramApplications } from '../pages/ProgramApplications'
+import { ApplicationsAll } from '../pages/ApplicationsAll'
+import { TeacherInterview } from '../pages/TeacherInterview'
+
 
 export const router = createBrowserRouter([
   {
@@ -25,6 +29,9 @@ export const router = createBrowserRouter([
       { path: 'teacher/groups/:groupId/students', element: <TeacherGroupStudents /> },
       { path: 'teacher/groups/:groupId/manage', element: <TeacherGroupManage /> },
       { path: '/staff/groups/:groupId/applications', element: <GroupApplicationsStaff /> },
+      { path: 'program/:id/applications', element: <ProgramApplications /> },
+      { path: 'applications', element: <ApplicationsAll /> },
+      { path: 'teacher/applications/:appId/interview', element: <TeacherInterview /> },
     ],
   },
 ])

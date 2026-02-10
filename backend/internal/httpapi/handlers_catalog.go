@@ -5,19 +5,25 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 
 	"github.com/Pavlushechko/itcube-education/internal/auth"
+	"github.com/Pavlushechko/itcube-education/internal/domain"
 	"github.com/Pavlushechko/itcube-education/internal/repo"
 )
 
 type CatalogHandler struct {
 	v       *validator.Validate
 	catalog *repo.CatalogRepo
+}
+
+type ProgramAdminView struct {
+	Program domain.Program  `json:"Program"`
+	Cohorts []domain.Cohort `json:"Cohorts"`
+	Groups  []domain.Group  `json:"Groups"`
 }
 
 func NewCatalogHandler(catalog *repo.CatalogRepo) *CatalogHandler {
@@ -105,6 +111,7 @@ func (h *CatalogHandler) CreateCohort(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
+
 	var req createCohortReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad json", http.StatusBadRequest)
@@ -114,7 +121,17 @@ func (h *CatalogHandler) CreateCohort(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
 	pid, _ := uuid.Parse(req.ProgramID)
+
+	if c, ok, err := h.catalog.GetCohortByProgramYear(r.Context(), pid, req.Year); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if ok {
+		writeJSON(w, http.StatusOK, map[string]any{"id": c.ID.String()})
+		return
+	}
+
 	id, err := h.catalog.CreateCohort(r.Context(), pid, req.Year)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -236,7 +253,17 @@ func (h *CatalogHandler) GetProgramAdmin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, pg)
+	cohorts, err := h.catalog.ListCohortsByProgram(r.Context(), pid)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, ProgramAdminView{
+		Program: pg.Program,
+		Cohorts: cohorts,
+		Groups:  pg.Groups,
+	})
 }
 
 func (h *CatalogHandler) GetGroupTeachers(w http.ResponseWriter, r *http.Request) {
@@ -326,8 +353,38 @@ func (h *CatalogHandler) UpdateGroup(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// tiny helper if you need it somewhere else
-func atoi(s string) (int, bool) {
-	n, err := strconv.Atoi(s)
-	return n, err == nil
+type updateProgramReq struct {
+	Title       *string `json:"title"`
+	Description *string `json:"description"`
+}
+
+func (h *CatalogHandler) UpdateProgram(w http.ResponseWriter, r *http.Request) {
+	if auth.Role(r.Context()) != "admin" {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	pid, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+
+	var req updateProgramReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad json", http.StatusBadRequest)
+		return
+	}
+
+	if req.Title == nil && req.Description == nil {
+		http.Error(w, "nothing to update", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.catalog.UpdateProgram(r.Context(), pid, req.Title, req.Description); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }

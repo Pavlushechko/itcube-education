@@ -93,7 +93,7 @@ func (h *ApplicationHandler) ListByFilter(w http.ResponseWriter, r *http.Request
 		status = &v
 	}
 
-	apps, err := h.appRepo.ListByFilter(r.Context(), groupID, status)
+	apps, err := h.appRepo.ListByFilterView(r.Context(), groupID, status)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -206,14 +206,15 @@ func (h *ApplicationHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Case 2: program_id filter
 	if programID != nil {
-		var apps []domain.EnrollmentApplication
-		var err error
+		var (
+			apps any
+			err  error
+		)
 
 		if isStaff {
-			apps, err = h.appRepo.ListByProgram(r.Context(), *programID, status)
+			apps, err = h.appRepo.ListByProgramView(r.Context(), *programID, status)
 		} else {
-			// преподаватель = назначение, а не роль
-			apps, err = h.appRepo.ListForTeacherByProgram(r.Context(), actorID, *programID, status)
+			apps, err = h.appRepo.ListForTeacherByProgramView(r.Context(), actorID, *programID, status)
 		}
 
 		if err != nil {
@@ -224,6 +225,17 @@ func (h *ApplicationHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// staff без фильтров — можно, но лучше не надо без пагинации
+	// Case 3: staff без фильтров — показать все (пока без пагинации)
+	if isStaff {
+		apps, err := h.appRepo.ListAllView(r.Context(), status)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSON(w, http.StatusOK, apps)
+		return
+	}
+
 	http.Error(w, "program_id or group_id is required", http.StatusBadRequest)
+
 }

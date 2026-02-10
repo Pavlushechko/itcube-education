@@ -14,6 +14,7 @@ import (
 type Deps struct {
 	ApplicationHandler *ApplicationHandler
 	CatalogHandler     *CatalogHandler
+	ProgramHandler     *ProgramHandler
 	TeacherHandler     *TeacherHandler
 	MaterialHandler    *MaterialHandler
 	ProgressHandler    *ProgressHandler
@@ -37,15 +38,16 @@ func NewRouter(d Deps) http.Handler {
 		r.Get("/programs", d.CatalogHandler.ListPrograms)
 		r.Get("/programs/{id}", d.CatalogHandler.GetProgram)
 	})
-
 	r.Get("/applications", d.ApplicationHandler.List)
+	// Private program view (staff/teacher)
+	r.Get("/programs/{id}", d.ProgramHandler.GetProgramPrivate)
 
 	// Admin catalog management
 	r.Route("/admin", func(r chi.Router) {
 		// existing:
-		r.Get("/applications", d.ApplicationHandler.ListByFilter)
-		r.Get("/programs", d.CatalogHandler.ListProgramsAdmin)
-		r.Get("/programs/{id}", d.CatalogHandler.GetProgramAdmin)
+		r.Get("/applications", d.ApplicationHandler.ListByFilter) //
+		r.Get("/programs", d.CatalogHandler.ListProgramsAdmin)    //
+		r.Get("/programs/{id}", d.CatalogHandler.GetProgramAdmin) //
 		r.Get("/groups/{id}/teachers", d.CatalogHandler.GetGroupTeachers)
 		r.Post("/applications/{id}/status", d.ApplicationHandler.ChangeStatus)
 		r.Post("/programs", d.CatalogHandler.CreateProgram)
@@ -56,19 +58,22 @@ func NewRouter(d Deps) http.Handler {
 		r.Post("/groups/{groupID}/materials", d.MaterialHandler.CreateForGroup)
 		r.Post("/groups/{id}/close", d.CatalogHandler.CloseGroup)
 		r.Patch("/groups/{id}", d.CatalogHandler.UpdateGroup)
+		r.Patch("/programs/{id}", d.CatalogHandler.UpdateProgram)
 		r.Delete("/groups/{id}/teachers", d.CatalogHandler.RemoveTeacher)
 	})
 
 	// Teacher
 	r.Route("/teacher", func(r chi.Router) {
 		r.Get("/groups", d.TeacherHandler.MyGroups)
-		r.Get("/groups/{id}/applications", d.TeacherHandler.GroupApplications)
+		r.Get("/groups/{id}/applications", d.TeacherHandler.GroupApplications) //
 		r.Post("/applications/{appID}/interview", d.TeacherHandler.RecordInterview)
 		r.Post("/groups/{groupID}/materials", d.MaterialHandler.CreateForGroup)
 		r.Post("/groups/{groupID}/assignments", d.AssignmentHandler.CreateForGroup)
 		r.Get("/groups/{groupID}/submissions", d.SubmissionHandler.ListForTeacher)
 		r.Post("/submissions/{submissionID}/review", d.SubmissionHandler.Review)
 		r.Get("/groups/{id}/students", d.TeacherHandler.GroupStudents)
+		r.Get("/programs/{id}/access", d.TeacherHandler.ProgramAccess)
+
 	})
 
 	// Learner area (after enrollment)

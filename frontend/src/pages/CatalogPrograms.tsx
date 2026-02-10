@@ -1,3 +1,5 @@
+// src/pages/CatalogPrograms.tsx
+
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api'
 import type { Program } from '../lib/types'
@@ -51,7 +53,10 @@ export function CatalogPrograms() {
             <ul>
               {drafts.map(p => (
                 <li key={p.ID}>
-                  <Link to={`/program/${p.ID}`}>{p.Title}</Link>{' '}
+                  <Link to={`/program/${p.ID}`}>
+                    {p.Title}
+                    {isStaff ? ` (${p.ID})` : ''}
+                  </Link>{' '}
                   <span style={{ opacity: 0.75 }}>(draft)</span>
                 </li>
               ))}
@@ -64,7 +69,10 @@ export function CatalogPrograms() {
       <ul>
         {publicItems.map(p => (
           <li key={p.ID}>
-            <Link to={`/program/${p.ID}`}>{p.Title}</Link>
+            <Link to={`/program/${p.ID}`}>
+              {p.Title}
+              {isStaff ? ` (${p.ID})` : ''}
+            </Link>
           </li>
         ))}
       </ul>

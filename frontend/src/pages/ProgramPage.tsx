@@ -1,83 +1,46 @@
-// src/pages/ProgramPage.tsx
 
+// src/pages/ProgramPage.tsx
 import { useEffect, useMemo, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { api } from '../lib/api'
-import { useParams, Link } from 'react-router-dom'
 import type { ProgramWithGroups } from '../lib/types'
 import { getIdentity } from '../lib/auth'
-import { AdminPublishProgram } from '../ui/AdminPublishProgram'
 import { Markdown } from '../ui/Markdown'
-import { GroupTeacherAdminPanel } from '../ui/GroupTeacherAdminPanel'
+import { AdminPublishProgram } from '../ui/AdminPublishProgram'
 import { AdminCreateGroup } from '../ui/AdminCreateGroup'
+import { GroupTeacherAdminPanel } from '../ui/GroupTeacherAdminPanel'
 
 type AppLite = {
   GroupID: string
   Status: string
 }
 
+type PrivateProgramView = {
+  program: any
+  cohorts: any[]
+  groups: any[]
+}
+
 export function ProgramPage() {
   const { id } = useParams()
-  const [data, setData] = useState<ProgramWithGroups | null>(null)
-  const [myApps, setMyApps] = useState<AppLite[]>([])
-  const [err, setErr] = useState<string>('')
-
   const ident = getIdentity()
+
   const isStaff = ident.role === 'admin' || ident.role === 'moderator'
-  const isPublished = data?.Program?.Status === 'published'
+  const isAdmin = ident.role === 'admin'
 
-  const [editing, setEditing] = useState<Record<string, boolean>>({})
-  const [draft, setDraft] = useState<
-    Record<string, { title: string; capacity: number; is_open: boolean; requires_interview: boolean }>
-  >({})
-  const [saving, setSaving] = useState<Record<string, boolean>>({})
+  const [data, setData] = useState<ProgramWithGroups | null>(null)
+  const [err, setErr] = useState('')
 
-  function startEdit(g: any) {
-    setEditing((m) => ({ ...m, [g.ID]: true }))
-    setDraft((m) => ({
-      ...m,
-      [g.ID]: {
-        title: g.Title ?? '',
-        capacity: Number(g.Capacity ?? 0),
-        is_open: Boolean(g.IsOpen ?? true),
-        requires_interview: Boolean(g.RequiresInterview ?? false),
-      },
-    }))
-  }
+  // teacherMode = это когда role=user, но доступ к private /programs/{id} есть
+  // (значит назначен преподавателем хотя бы в одну группу этого курса)
+  const [teacherMode, setTeacherMode] = useState(false)
 
-  function cancelEdit(groupId: string) {
-    setEditing((m) => ({ ...m, [groupId]: false }))
-    setDraft((m) => {
-      const copy = { ...m }
-      delete copy[groupId]
-      return copy
-    })
-  }
+  const [myApps, setMyApps] = useState<AppLite[]>([])
 
-  async function reload() {
-    if (!id) return
-    setErr('')
-
-    const loadProgram = isStaff ? api.getProgramAdmin(id) : api.getProgram(id)
-
-    try {
-      const [pg, apps] = await Promise.all([loadProgram, api.listMyApplications()])
-      setData(pg)
-
-      const lite: AppLite[] = (apps ?? []).map((a: any) => ({
-        GroupID: a.GroupID,
-        Status: a.Status,
-      }))
-      setMyApps(lite)
-    } catch (e: any) {
-      setErr(String(e.message || e))
-    }
-  }
-
-  useEffect(() => {
-    setData(null)
-    reload()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, isStaff])
+  // admin edit
+  const [editTitle, setEditTitle] = useState('')
+  const [editDesc, setEditDesc] = useState('')
+  const [savingProgram, setSavingProgram] = useState(false)
 
   const appByGroup = useMemo(() => {
     const m = new Map<string, string>()
@@ -85,177 +48,169 @@ export function ProgramPage() {
     return m
   }, [myApps])
 
+  async function reload() {
+    if (!id) return
+    setErr('')
+
+    try {
+      // 1) Грузим данные программы
+      if (isStaff) {
+        const pg = await api.getProgramAdmin(id)
+        setData(pg)
+        setTeacherMode(false)
+      } else {
+        // для user всегда public (никаких 403)
+        const pg = await api.getProgram(id)
+        setData(pg)
+
+        // 2) Проверяем назначение "преподаватель по программе" отдельной ручкой (200 ok:false)
+        try {
+          const res = await api.teacherProgramAccess(id)
+          setTeacherMode(Boolean(res?.ok))
+        } catch {
+          // если вдруг ручка недоступна — просто считаем не учитель
+          setTeacherMode(false)
+        }
+      }
+
+      // 3) Мои заявки
+      if (ident.role === 'user') {
+        const apps = await api.listMyApplications()
+        const lite: AppLite[] = (apps ?? []).map((a: any) => ({
+          GroupID: a.GroupID,
+          Status: a.Status,
+        }))
+        setMyApps(lite)
+      } else {
+        setMyApps([])
+      }
+    } catch (e: any) {
+      setErr(String(e.message || e))
+    }
+  }
+
+
+  useEffect(() => {
+    setData(null)
+    setTeacherMode(false)
+    reload()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, isStaff])
+
+  useEffect(() => {
+    if (!data) return
+    setEditTitle(data.Program.Title || '')
+    setEditDesc(data.Program.Description || '')
+  }, [data])
+
   async function apply(groupId: string) {
     if (appByGroup.has(groupId)) return
-
     try {
       const res = await api.createApplication(groupId, 'хочу учиться')
       alert('Заявка создана: ' + res.id)
       await reload()
     } catch (e: any) {
-      const msg = e?.message || String(e)
-
-      if (typeof msg === 'string' && msg.toLowerCase().includes('duplicate')) {
-        alert('Заявка на эту группу уже существует. Проверь "Мои заявки".')
-        await reload()
-        return
-      }
-
-      alert('Ошибка: ' + msg)
+      alert('Ошибка: ' + (e?.message || String(e)))
     }
   }
 
-  if (!data) return <div style={{ padding: 12 }}>{err || 'Загрузка...'}</div>
+  async function saveProgram() {
+    if (!id) return
+    setSavingProgram(true)
+    try {
+      await api.updateProgram(id, { title: editTitle, description: editDesc })
+      alert('Сохранено')
+      await reload()
+    } catch (e: any) {
+      alert('Ошибка: ' + (e?.message || String(e)))
+    } finally {
+      setSavingProgram(false)
+    }
+  }
+
+  if (!data) return <div>{err || 'Загрузка...'}</div>
+
+  const canSeeProgramAppsButton = teacherMode || isStaff
 
   return (
-    <div style={{ padding: 12 }}>
+    <div>
       <h2>{data.Program.Title}</h2>
+
       <Markdown text={data.Program.Description || ''} />
-      {/* ✅ Кнопка "Опубликовать" (только admin) */}
-      {ident.role === 'admin' && data?.Program?.ID && (
-        <div style={{ marginTop: 10 }}>
-          <AdminPublishProgram programId={data.Program.ID} />
+
+      {canSeeProgramAppsButton && id && (
+        <div>
+          <Link to={`/program/${id}/applications`}>Заявки на курс</Link>
         </div>
       )}
-      {/* ВРЕМЕННО: дебаг, потом уберёшь
-      <pre style={{ background: '#f6f6f6', padding: 8, overflow: 'auto' }}>
-        {JSON.stringify(data, null, 2)}
-      </pre> */}
 
-      {ident.role === 'admin' && data?.Program?.ID && (
-        <AdminCreateGroup programId={data.Program.ID} onDone={reload} />
+      {isAdmin && id && (
+        <div>
+          <h3>Управление программой (admin)</h3>
+
+          <div>
+            <div>Название</div>
+            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} />
+          </div>
+
+          <div>
+            <div>Описание</div>
+            <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} />
+          </div>
+
+          <div>
+            <button disabled={savingProgram} onClick={saveProgram}>
+              {savingProgram ? 'Сохраняю...' : 'Сохранить'}
+            </button>
+          </div>
+
+          <div>
+            <AdminPublishProgram programId={id} />
+          </div>
+
+          <div>
+            <AdminCreateGroup programId={id} onDone={reload} />
+          </div>
+        </div>
       )}
 
-      <h3>Открытые группы</h3>
+      <h3>Группы</h3>
 
       {(data.Groups ?? []).length === 0 ? (
-        <div style={{ opacity: 0.75 }}>
-          Пока нет групп. {ident.role === 'admin' ? 'Создай группу выше.' : ''}
-        </div>
+        <div>Пока нет групп.</div>
       ) : (
         <ul>
-          {(data.Groups ?? []).map((g) => {
+          {(data.Groups ?? []).map((g: any) => {
             const status = appByGroup.get(g.ID)
             const alreadyApplied = Boolean(status)
 
             return (
-              <li key={g.ID} style={{ marginBottom: 14 }}>
+              <li key={g.ID}>
                 <div>
-                  <b>{g.Title}</b> (мест: {g.Capacity}) {g.RequiresInterview ? '• интервью' : ''}
+                  <b>{g.Title}</b>
+                </div>
+                <div>
+                  Мест: {g.Capacity} {g.RequiresInterview ? '• интервью' : ''}
+                  {isStaff ? (g.IsOpen ? ' • открыта' : ' • закрыта') : null}
                 </div>
 
-                {alreadyApplied && (
-                  <div style={{ opacity: 0.75 }}>
-                    Заявка уже есть: <b>{status}</b>
+                {ident.role === 'user' && !teacherMode && (
+                  <div>
+                    {alreadyApplied ? (
+                      <div>Заявка уже есть: {status}</div>
+                    ) : (
+                      <button onClick={() => apply(g.ID)}>Подать заявку</button>
+                    )}
+
+                    <div>
+                      <Link to={`/learn/group/${g.ID}`}>Перейти в обучение (если зачислен)</Link>
+                    </div>
                   </div>
                 )}
 
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
-                  <button disabled={alreadyApplied} onClick={() => apply(g.ID)}>
-                    {alreadyApplied ? 'Заявка уже подана' : 'Подать заявку'}
-                  </button>
-                  <Link to={`/staff/groups/${g.ID}/applications`}>Заявки (staff)</Link>
-
-                  <Link to={`/learn/group/${g.ID}`}>Перейти в обучение (если зачислен)</Link>
-                </div>
-
-                {/* ✅ Назначение преподавателей (admin/moderator видят список, назначает только admin) */}
                 {(ident.role === 'admin' || ident.role === 'moderator') && (
-                  <GroupTeacherAdminPanel groupId={g.ID} canAssign={ident.role === 'admin'} />
-                )}
-
-                {/* ✅ Редактирование группы (только admin) */}
-                {ident.role === 'admin' && (
-                  <div style={{ marginTop: 6 }}>
-                    {!editing[g.ID] ? (
-                      <button onClick={() => startEdit(g)}>Редактировать группу</button>
-                    ) : (
-                      <div style={{ marginTop: 8, padding: 10, border: '1px solid #ddd', borderRadius: 6 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 8 }}>
-                          <div>Название</div>
-                          <input
-                            value={draft[g.ID]?.title ?? ''}
-                            onChange={(e) =>
-                              setDraft((m) => ({ ...m, [g.ID]: { ...m[g.ID], title: e.target.value } }))
-                            }
-                          />
-
-                          <div>Вместимость</div>
-                          <input
-                            type="number"
-                            value={draft[g.ID]?.capacity ?? 0}
-                            onChange={(e) =>
-                              setDraft((m) => ({
-                                ...m,
-                                [g.ID]: { ...m[g.ID], capacity: Number(e.target.value) },
-                              }))
-                            }
-                          />
-
-                          <div>Открыта</div>
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={draft[g.ID]?.is_open ?? true}
-                              onChange={(e) =>
-                                setDraft((m) => ({
-                                  ...m,
-                                  [g.ID]: { ...m[g.ID], is_open: e.target.checked },
-                                }))
-                              }
-                            />
-                            {' '}да
-                          </label>
-
-                          <div>Интервью</div>
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={draft[g.ID]?.requires_interview ?? false}
-                              onChange={(e) =>
-                                setDraft((m) => ({
-                                  ...m,
-                                  [g.ID]: { ...m[g.ID], requires_interview: e.target.checked },
-                                }))
-                              }
-                            />
-                            {' '}требуется
-                          </label>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                          <button
-                            disabled={saving[g.ID]}
-                            onClick={async () => {
-                              const d = draft[g.ID]
-                              if (!d) return
-                              setSaving((m) => ({ ...m, [g.ID]: true }))
-                              try {
-                                await api.updateGroup(g.ID, {
-                                  title: d.title,
-                                  capacity: d.capacity,
-                                  is_open: d.is_open,
-                                  requires_interview: d.requires_interview,
-                                })
-                                alert('Сохранено')
-                                cancelEdit(g.ID)
-                                await reload()
-                              } catch (e: any) {
-                                alert('Ошибка: ' + (e?.message || String(e)))
-                              } finally {
-                                setSaving((m) => ({ ...m, [g.ID]: false }))
-                              }
-                            }}
-                          >
-                            {saving[g.ID] ? 'Сохраняю...' : 'Сохранить'}
-                          </button>
-
-                          <button disabled={saving[g.ID]} onClick={() => cancelEdit(g.ID)}>
-                            Отмена
-                          </button>
-                        </div>
-                      </div>
-                    )}
+                  <div>
+                    <GroupTeacherAdminPanel groupId={g.ID} canAssign={ident.role === 'admin'} />
                   </div>
                 )}
               </li>

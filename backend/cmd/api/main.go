@@ -48,6 +48,7 @@ func main() {
 
 	appHandler := httpapi.NewApplicationHandler(appSvc, appRepo, catalogRepo)
 	catalogHandler := httpapi.NewCatalogHandler(catalogRepo)
+	programHandler := httpapi.NewProgramHandler(catalogRepo)
 	teacherHandler := httpapi.NewTeacherHandler(catalogRepo, appRepo, invSvc)
 
 	matRepo := repo.NewMaterialRepo(pool)
@@ -69,6 +70,7 @@ func main() {
 	router := httpapi.NewRouter(httpapi.Deps{
 		ApplicationHandler: appHandler,
 		CatalogHandler:     catalogHandler,
+		ProgramHandler:     programHandler,
 		TeacherHandler:     teacherHandler,
 		MaterialHandler:    matHandler,
 		ProgressHandler:    progressHandler,
