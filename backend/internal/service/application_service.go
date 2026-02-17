@@ -52,6 +52,34 @@ func (s *ApplicationService) Create(ctx context.Context, groupID uuid.UUID, comm
 		return uuid.Nil, errors.New("teacher cannot apply to own program")
 	}
 
+	rej, err := s.appRepo.HasRejected(ctx, userID, groupID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if rej {
+		return uuid.Nil, errors.New("cannot reapply after rejected") // или своё Err...
+	}
+
+	// ✅ правило повтора по ЭТОЙ ЖЕ группе:
+	// cancelled -> можно снова (новая запись)
+	// rejected  -> нельзя снова в эту же группу
+	// submitted/in_review/approved -> нельзя (уже есть активная/успешная)
+	if last, ok, err := s.appRepo.GetLatestByUserGroup(ctx, userID, groupID); err != nil {
+		return uuid.Nil, err
+	} else if ok {
+		switch last.Status {
+		case domain.AppCancelled:
+			// ok, разрешаем создать новую
+		case domain.AppRejected:
+			return uuid.Nil, errors.New("cannot reapply to this group after rejection")
+		case domain.AppSubmitted, domain.AppInReview, domain.AppApproved:
+			return uuid.Nil, errors.New("application already exists")
+		default:
+			// на всякий случай: не плодим дублей
+			return uuid.Nil, errors.New("application already exists")
+		}
+	}
+
 	published, open, err := s.catalogRepo.IsGroupAvailableForApply(ctx, groupID)
 	if err != nil {
 		return uuid.Nil, err
@@ -164,6 +192,29 @@ func (s *ApplicationService) ChangeStatus(ctx context.Context, appID uuid.UUID, 
 		"from":           string(from),
 		"to":             string(to),
 		"actor_role":     actorRole,
+	})
+
+	return nil
+}
+
+func (s *ApplicationService) Cancel(ctx context.Context, appID uuid.UUID) error {
+	userID, ok := auth.UserID(ctx)
+	if !ok {
+		return errors.New("unauthorized")
+	}
+
+	ok2, err := s.appRepo.CancelByUser(ctx, appID, userID)
+	if err != nil {
+		return err
+	}
+	if !ok2 {
+		// либо не твоя заявка, либо уже не тот статус
+		return errors.New("cannot cancel application")
+	}
+
+	_ = s.outbox.Add(ctx, "enrollment_application", appID, "application.cancelled", map[string]any{
+		"application_id": appID.String(),
+		"user_id":        userID.String(),
 	})
 
 	return nil

@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Pavlushechko/itcube-education/internal/domain"
@@ -407,9 +408,12 @@ func (r *CatalogRepo) GetCohortByProgramYear(ctx context.Context, programID uuid
 	`, programID, year)
 
 	var c domain.Cohort
-	if err := row.Scan(&c.ID, &c.ProgramID, &c.Year, &c.CreatedAt); err != nil {
-		// no rows
-		return domain.Cohort{}, false, nil
+	err := row.Scan(&c.ID, &c.ProgramID, &c.Year, &c.CreatedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return domain.Cohort{}, false, nil
+		}
+		return domain.Cohort{}, false, err
 	}
 	return c, true, nil
 }

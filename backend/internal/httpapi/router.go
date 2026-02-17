@@ -95,6 +95,7 @@ func NewRouter(d Deps) http.Handler {
 	r.Route("/enrollments", func(r chi.Router) {
 		r.Post("/applications", d.ApplicationHandler.Create)
 		r.Get("/me/applications", d.ApplicationHandler.ListMine)
+		r.Post("/applications/{id}/cancel", d.ApplicationHandler.CancelMyApplication)
 	})
 
 	return r

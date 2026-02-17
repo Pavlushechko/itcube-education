@@ -4,9 +4,11 @@ package repo
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"strconv"
@@ -482,6 +484,52 @@ func (r *ApplicationRepo) ListAll(ctx context.Context, status *string) ([]domain
 		res = append(res, a)
 	}
 	return res, rows.Err()
+}
+
+func (r *ApplicationRepo) CancelByUser(ctx context.Context, appID, userID uuid.UUID) (bool, error) {
+	ct, err := r.db.Exec(ctx, `
+		update enrollment_applications
+		set status = 'cancelled', updated_at = now()
+		where id=$1 and user_id=$2 and status in ('submitted','in_review')
+	`, appID, userID)
+	if err != nil {
+		return false, err
+	}
+	return ct.RowsAffected() > 0, nil
+}
+
+func (r *ApplicationRepo) GetLatestByUserGroup(ctx context.Context, userID, groupID uuid.UUID) (domain.EnrollmentApplication, bool, error) {
+	row := r.db.QueryRow(ctx, `
+		select id, user_id, group_id, status, comment, created_at, updated_at
+		from enrollment_applications
+		where user_id=$1 and group_id=$2
+		order by created_at desc
+		limit 1
+	`, userID, groupID)
+
+	var a domain.EnrollmentApplication
+	var st string
+	err := row.Scan(&a.ID, &a.UserID, &a.GroupID, &st, &a.Comment, &a.CreatedAt, &a.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.EnrollmentApplication{}, false, nil
+		}
+		return domain.EnrollmentApplication{}, false, err
+	}
+	a.Status = domain.ApplicationStatus(st)
+	return a, true, nil
+}
+
+func (r *ApplicationRepo) HasRejected(ctx context.Context, userID, groupID uuid.UUID) (bool, error) {
+	row := r.db.QueryRow(ctx, `
+		select exists(
+			select 1
+			from enrollment_applications
+			where user_id=$1 and group_id=$2 and status='rejected'
+		)
+	`, userID, groupID)
+	var ok bool
+	return ok, row.Scan(&ok)
 }
 
 func itoa(i int) string { // чтобы не тащить strconv в каждый файл

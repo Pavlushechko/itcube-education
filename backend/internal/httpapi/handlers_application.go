@@ -239,3 +239,23 @@ func (h *ApplicationHandler) List(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "program_id or group_id is required", http.StatusBadRequest)
 
 }
+
+func (h *ApplicationHandler) CancelMyApplication(w http.ResponseWriter, r *http.Request) {
+	appID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		http.Error(w, "invalid app id", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.svc.Cancel(r.Context(), appID); err != nil {
+		msg := err.Error()
+		if msg == "unauthorized" {
+			http.Error(w, msg, http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
