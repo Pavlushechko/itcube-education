@@ -78,7 +78,9 @@ func (h *TeacherHandler) GroupApplications(w http.ResponseWriter, r *http.Reques
 	}
 	status := &statusVal
 
-	apps, err := h.appRepo.ListByFilter(r.Context(), &gid, status)
+	// year фильтр для teacher-группы обычно не нужен, но сигнатура требует — передаём nil
+	apps, err := h.appRepo.ListByFilterView(r.Context(), &gid, status, nil)
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

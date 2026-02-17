@@ -8,6 +8,8 @@ import { ProgramPage } from '../pages/ProgramPage'
 import { ApplicationsAll } from '../pages/ApplicationsAll'
 import { GroupApplicationsStaff } from '../pages/GroupApplicationsStaff'
 import { ProgramApplications } from '../pages/ProgramApplications'
+import { StaffInterview } from '../pages/StaffInterview'
+
 
 export const router = createBrowserRouter([
   {
@@ -23,6 +25,7 @@ export const router = createBrowserRouter([
 
       { path: 'applications', element: <ApplicationsAll /> },
       { path: 'staff/groups/:groupId/applications', element: <GroupApplicationsStaff /> },
+      { path: 'applications/:appId/interview', element: <StaffInterview /> },
     ],
   },
 ])

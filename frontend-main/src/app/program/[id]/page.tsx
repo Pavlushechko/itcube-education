@@ -39,8 +39,12 @@ export default function ProgramPage() {
   const [data, setData] = useState<ProgramWithGroups | null>(null)
   const [err, setErr] = useState('')
 
-  const [teacherMode, setTeacherMode] = useState(false)
+  // ❗️ВАЖНО: null = еще не знаем, учитель или нет
+  const [teacherMode, setTeacherMode] = useState<boolean | null>(null)
+
   const [myApps, setMyApps] = useState<AppLite[]>([])
+  const [appsLoaded, setAppsLoaded] = useState(false)
+
   const [draftByGroup, setDraftByGroup] = useState<Record<string, string>>({})
   const [learnOkByGroup, setLearnOkByGroup] = useState<Record<string, boolean>>({})
 
@@ -53,6 +57,8 @@ export default function ProgramPage() {
   async function reload() {
     if (!id) return
     setErr('')
+    setAppsLoaded(false)
+    setTeacherMode(null)
 
     try {
       const pg = await api.getProgram(id)
@@ -66,28 +72,30 @@ export default function ProgramPage() {
         setTeacherMode(false)
       }
 
-      // заявки ученика
-      if (ident.role === 'user') {
-        const apps = await api.listMyApplications()
-        setMyApps((apps ?? []).map((a: any) => ({ ID: a.ID, GroupID: a.GroupID, Status: a.Status })))
-      } else {
-        setMyApps([])
-      }
+      // заявки ученика (у тебя role всегда user, и у препода тоже user,
+      // поэтому всё равно грузим — но важен факт teacherMode)
+      const apps = await api.listMyApplications()
+      setMyApps((apps ?? []).map((a: any) => ({ ID: a.ID, GroupID: a.GroupID, Status: a.Status })))
+      setAppsLoaded(true)
     } catch (e: any) {
       setErr(e?.message || String(e))
+      // даже если ошибка — помечаем как “загрузка завершена”, чтобы UI не висел
+      setTeacherMode(false)
+      setAppsLoaded(true)
     }
   }
 
   useEffect(() => {
     setData(null)
-    setTeacherMode(false)
     setMyApps([])
+    setDraftByGroup({})
+    setLearnOkByGroup({})
     reload()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 
   useEffect(() => {
-    if (ident.role !== 'user') return
+    if (!appsLoaded) return
     if (!data) return
 
     for (const g of data.Groups ?? []) {
@@ -100,7 +108,7 @@ export default function ProgramPage() {
         .catch(() => setLearnOkByGroup((prev) => ({ ...prev, [g.ID]: false })))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, myApps])
+  }, [data, appsLoaded, myApps])
 
   async function apply(groupId: string) {
     const st = appByGroup.get(groupId)
@@ -130,10 +138,14 @@ export default function ProgramPage() {
     }
   }
 
-
   if (!data) return <div style={{ padding: 12 }}>{err || 'Загрузка...'}</div>
 
-  const canApply = ident.role === 'user' && !teacherMode
+  // ✅ можно ли вообще показывать блок “подать заявку”
+  // ВАЖНО: teacherMode должен быть известен, и мои заявки должны быть загружены,
+  // иначе будет фликер.
+  const readyForApplyUI = appsLoaded && teacherMode !== null
+
+  const canApply = readyForApplyUI && ident.role === 'user' && teacherMode === false
 
   return (
     <div style={{ padding: 12 }}>
@@ -142,10 +154,12 @@ export default function ProgramPage() {
       </div>
 
       <h2>{data.Program.Title}</h2>
-      <div style={{ whiteSpace: 'pre-wrap' }}><Markdown text={data.Program.Description || ''} /></div>
+      <div style={{ whiteSpace: 'pre-wrap' }}>
+        <Markdown text={data.Program.Description || ''} />
+      </div>
 
       {/* ✅ ссылка на заявки курса (только преподавателю) */}
-      {teacherMode ? (
+      {teacherMode === true ? (
         <div style={{ marginTop: 8 }}>
           <Link href={`/program/${id}/applications`}>Заявки на курс</Link>
         </div>
@@ -167,7 +181,10 @@ export default function ProgramPage() {
                   Мест: {g.Capacity} {g.RequiresInterview ? '• интервью' : ''}
                 </div>
 
-                {canApply ? (
+                {/* ✅ пока не готовы данные — НЕ рисуем форму */}
+                {!readyForApplyUI ? (
+                  <div style={{ marginTop: 8, opacity: 0.75 }}>Проверяю доступ...</div>
+                ) : canApply ? (
                   <div style={{ marginTop: 8 }}>
                     {status ? (
                       <div>
@@ -219,11 +236,15 @@ export default function ProgramPage() {
                   </div>
                 ) : (
                   <div style={{ marginTop: 8, opacity: 0.75 }}>
-                    {teacherMode ? 'Вы в режиме преподавателя: подавать на свой курс нельзя.' : null}
+                    {teacherMode === true
+                      ? 'Вы в режиме преподавателя: подавать на свой курс нельзя.'
+                      : status
+                        ? 'Заявка уже есть — см. статус выше.'
+                        : null}
                   </div>
                 )}
 
-                {/* ✅ переход в обучение, если надо (как было раньше) */}
+                {/* ✅ переход в обучение */}
                 {status === 'approved' && learnOkByGroup[g.ID] === true ? (
                   <div style={{ marginTop: 6 }}>
                     <Link href={`/learn/group/${g.ID}`}>Перейти в обучение</Link>

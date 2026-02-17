@@ -39,11 +39,12 @@ export const api = {
   getProgram: (id: string) => request<any>(`/catalog/programs/${id}`),
   
   // staff: заявки (у тебя /applications для staff возвращает все)
-  listApplications: (opts: { groupId?: string; programId?: string; status?: string }) => {
+  listApplications: (opts: { groupId?: string; programId?: string; status?: string; year?: number }) => {
     const qs = new URLSearchParams()
     if (opts.groupId) qs.set('group_id', opts.groupId)
     if (opts.programId) qs.set('program_id', opts.programId)
     if (opts.status) qs.set('status', opts.status)
+    if (opts.year !== undefined) qs.set('year', String(opts.year))
     return request<any[]>(`/applications?${qs.toString()}`)
   },
 
@@ -119,4 +120,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ status, reason }),
     }),
+  
+  recordInterview: (appId: string, result: 'recommended' | 'not_recommended' | 'needs_more' | 'pending', comment: string) =>
+    request<void>(`/teacher/applications/${appId}/interview`, {
+      method: 'POST',
+      body: JSON.stringify({ result, comment }),
+    }),
+
 }

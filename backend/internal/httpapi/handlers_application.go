@@ -5,6 +5,7 @@ package httpapi
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-playground/validator/v10"
@@ -64,36 +65,6 @@ func (h *ApplicationHandler) ListMine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	apps, err := h.appRepo.ListByUser(r.Context(), uid)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, http.StatusOK, apps)
-}
-
-func (h *ApplicationHandler) ListByFilter(w http.ResponseWriter, r *http.Request) {
-	role := auth.Role(r.Context())
-	if role != "admin" && role != "moderator" {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-
-	var groupID *uuid.UUID
-	if v := r.URL.Query().Get("group_id"); v != "" {
-		id, err := uuid.Parse(v)
-		if err != nil {
-			http.Error(w, "invalid group_id", http.StatusBadRequest)
-			return
-		}
-		groupID = &id
-	}
-
-	var status *string
-	if v := r.URL.Query().Get("status"); v != "" {
-		status = &v
-	}
-
-	apps, err := h.appRepo.ListByFilterView(r.Context(), groupID, status)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -175,7 +146,18 @@ func (h *ApplicationHandler) List(w http.ResponseWriter, r *http.Request) {
 		status = &v
 	}
 
-	// Для не-staff обязательно нужен фильтр, иначе можно случайно "попросить всё"
+	// NEW: year filter
+	var year *int
+	if v := r.URL.Query().Get("year"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			http.Error(w, "invalid year", http.StatusBadRequest)
+			return
+		}
+		year = &n
+	}
+
+	// Для не-staff обязательно нужен фильтр program_id или group_id
 	if !isStaff && groupID == nil && programID == nil {
 		http.Error(w, "group_id or program_id is required", http.StatusBadRequest)
 		return
@@ -195,7 +177,8 @@ func (h *ApplicationHandler) List(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		apps, err := h.appRepo.ListByFilter(r.Context(), groupID, status)
+		// VIEW с year
+		apps, err := h.appRepo.ListByFilterView(r.Context(), groupID, status, year)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -212,9 +195,9 @@ func (h *ApplicationHandler) List(w http.ResponseWriter, r *http.Request) {
 		)
 
 		if isStaff {
-			apps, err = h.appRepo.ListByProgramView(r.Context(), *programID, status)
+			apps, err = h.appRepo.ListByProgramView(r.Context(), *programID, status, year)
 		} else {
-			apps, err = h.appRepo.ListForTeacherByProgramView(r.Context(), actorID, *programID, status)
+			apps, err = h.appRepo.ListForTeacherByProgramView(r.Context(), actorID, *programID, status, year)
 		}
 
 		if err != nil {
@@ -225,9 +208,9 @@ func (h *ApplicationHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Case 3: staff без фильтров — показать все (пока без пагинации)
+	// Case 3: staff без фильтров — показать все
 	if isStaff {
-		apps, err := h.appRepo.ListAllView(r.Context(), status)
+		apps, err := h.appRepo.ListAllView(r.Context(), status, year)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -237,7 +220,6 @@ func (h *ApplicationHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Error(w, "program_id or group_id is required", http.StatusBadRequest)
-
 }
 
 func (h *ApplicationHandler) CancelMyApplication(w http.ResponseWriter, r *http.Request) {

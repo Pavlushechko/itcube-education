@@ -45,7 +45,7 @@ func NewRouter(d Deps) http.Handler {
 	// Admin catalog management
 	r.Route("/admin", func(r chi.Router) {
 		// existing:
-		r.Get("/applications", d.ApplicationHandler.ListByFilter) //
+		r.Get("/applications", d.ApplicationHandler.List)         //
 		r.Get("/programs", d.CatalogHandler.ListProgramsAdmin)    //
 		r.Get("/programs/{id}", d.CatalogHandler.GetProgramAdmin) //
 		r.Get("/groups/{id}/teachers", d.CatalogHandler.GetGroupTeachers)

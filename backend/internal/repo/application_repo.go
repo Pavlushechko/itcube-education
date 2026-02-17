@@ -33,6 +33,9 @@ type ApplicationView struct {
 	ProgramTitle string
 	GroupTitle   string
 
+	// NEW: для фильтра по наборам(годам)
+	CohortYear *int
+
 	InterviewResult  *string
 	InterviewComment *string
 	InterviewByRole  *string
@@ -41,6 +44,218 @@ type ApplicationView struct {
 
 func NewApplicationRepo(db *pgxpool.Pool) *ApplicationRepo {
 	return &ApplicationRepo{db: db}
+}
+
+// NEW signature: + year
+func (r *ApplicationRepo) ListByFilterView(ctx context.Context, groupID *uuid.UUID, status *string, year *int) ([]ApplicationView, error) {
+	q := `
+		select a.id, a.user_id, a.group_id, a.status, a.comment, a.created_at, a.updated_at,
+		       p.id as program_id, p.title as program_title, g.title as group_title,
+			   c.year as cohort_year,
+		       i.result, i.comment, i.interviewer_role, i.updated_at
+		from enrollment_applications a
+		join groups g on g.id = a.group_id
+  		join programs p on p.id = g.program_id
+		left join cohorts c on c.id = g.cohort_id
+		left join interviews i on i.application_id = a.id
+		where 1=1
+	`
+	args := []any{}
+	i := 1
+
+	if groupID != nil {
+		q += " and a.group_id=$" + strconv.Itoa(i)
+		args = append(args, *groupID)
+		i++
+	}
+	if status != nil {
+		q += " and a.status=$" + strconv.Itoa(i)
+		args = append(args, *status)
+		i++
+	}
+	if year != nil {
+		q += " and c.year=$" + strconv.Itoa(i)
+		args = append(args, *year)
+		i++
+	}
+
+	q += " order by a.created_at desc"
+
+	rows, err := r.db.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make([]ApplicationView, 0)
+	for rows.Next() {
+		var a ApplicationView
+		if err := rows.Scan(
+			&a.ID, &a.UserID, &a.GroupID, &a.Status, &a.Comment, &a.CreatedAt, &a.UpdatedAt,
+			&a.ProgramID, &a.ProgramTitle, &a.GroupTitle,
+			&a.CohortYear,
+			&a.InterviewResult, &a.InterviewComment, &a.InterviewByRole, &a.InterviewAt,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, rows.Err()
+}
+
+// NEW signature: + year
+func (r *ApplicationRepo) ListByProgramView(ctx context.Context, programID uuid.UUID, status *string, year *int) ([]ApplicationView, error) {
+	q := `
+		select a.id, a.user_id, a.group_id, a.status, a.comment, a.created_at, a.updated_at,
+		       p.id as program_id, p.title as program_title, g.title as group_title,
+			   c.year as cohort_year,
+		       i.result, i.comment, i.interviewer_role, i.updated_at
+		from enrollment_applications a
+		join groups g on g.id = a.group_id
+  		join programs p on p.id = g.program_id
+		left join cohorts c on c.id = g.cohort_id
+		left join interviews i on i.application_id = a.id
+		where g.program_id = $1
+	`
+	args := []any{programID}
+	i := 2
+
+	if status != nil {
+		q += " and a.status=$" + strconv.Itoa(i)
+		args = append(args, *status)
+		i++
+	}
+	if year != nil {
+		q += " and c.year=$" + strconv.Itoa(i)
+		args = append(args, *year)
+		i++
+	}
+	q += " order by a.created_at desc"
+
+	rows, err := r.db.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make([]ApplicationView, 0)
+	for rows.Next() {
+		var a ApplicationView
+		if err := rows.Scan(
+			&a.ID, &a.UserID, &a.GroupID, &a.Status, &a.Comment, &a.CreatedAt, &a.UpdatedAt,
+			&a.ProgramID, &a.ProgramTitle, &a.GroupTitle,
+			&a.CohortYear,
+			&a.InterviewResult, &a.InterviewComment, &a.InterviewByRole, &a.InterviewAt,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, rows.Err()
+}
+
+// NEW signature: + year
+func (r *ApplicationRepo) ListForTeacherByProgramView(ctx context.Context, teacherID, programID uuid.UUID, status *string, year *int) ([]ApplicationView, error) {
+	q := `
+		select a.id, a.user_id, a.group_id, a.status, a.comment, a.created_at, a.updated_at,
+		       p.id as program_id, p.title as program_title, g.title as group_title,
+			   c.year as cohort_year,
+		       i.result, i.comment, i.interviewer_role, i.updated_at
+		from enrollment_applications a
+		join groups g on g.id = a.group_id
+  		join programs p on p.id = g.program_id
+		join group_teachers gt on gt.group_id = g.id
+		left join cohorts c on c.id = g.cohort_id
+		left join interviews i on i.application_id = a.id
+		where gt.teacher_user_id = $1 and g.program_id = $2
+	`
+	args := []any{teacherID, programID}
+	i := 3
+
+	if status != nil {
+		q += " and a.status=$" + strconv.Itoa(i)
+		args = append(args, *status)
+		i++
+	}
+	if year != nil {
+		q += " and c.year=$" + strconv.Itoa(i)
+		args = append(args, *year)
+		i++
+	}
+	q += " order by a.created_at desc"
+
+	rows, err := r.db.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make([]ApplicationView, 0)
+	for rows.Next() {
+		var a ApplicationView
+		if err := rows.Scan(
+			&a.ID, &a.UserID, &a.GroupID, &a.Status, &a.Comment, &a.CreatedAt, &a.UpdatedAt,
+			&a.ProgramID, &a.ProgramTitle, &a.GroupTitle,
+			&a.CohortYear,
+			&a.InterviewResult, &a.InterviewComment, &a.InterviewByRole, &a.InterviewAt,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, rows.Err()
+}
+
+// NEW signature: + year
+func (r *ApplicationRepo) ListAllView(ctx context.Context, status *string, year *int) ([]ApplicationView, error) {
+	q := `
+		select a.id, a.user_id, a.group_id, a.status, a.comment, a.created_at, a.updated_at,
+		       p.id as program_id, p.title as program_title, g.title as group_title,
+			   c.year as cohort_year,
+		       i.result, i.comment, i.interviewer_role, i.updated_at
+		from enrollment_applications a
+	  	join groups g on g.id = a.group_id
+  		join programs p on p.id = g.program_id
+		left join cohorts c on c.id = g.cohort_id
+		left join interviews i on i.application_id = a.id
+		where 1=1
+	`
+	args := []any{}
+	i := 1
+
+	if status != nil {
+		q += " and a.status=$" + strconv.Itoa(i)
+		args = append(args, *status)
+		i++
+	}
+	if year != nil {
+		q += " and c.year=$" + strconv.Itoa(i)
+		args = append(args, *year)
+		i++
+	}
+
+	q += " order by a.created_at desc"
+
+	rows, err := r.db.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make([]ApplicationView, 0)
+	for rows.Next() {
+		var a ApplicationView
+		if err := rows.Scan(
+			&a.ID, &a.UserID, &a.GroupID, &a.Status, &a.Comment, &a.CreatedAt, &a.UpdatedAt,
+			&a.ProgramID, &a.ProgramTitle, &a.GroupTitle,
+			&a.CohortYear,
+			&a.InterviewResult, &a.InterviewComment, &a.InterviewByRole, &a.InterviewAt,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, a)
+	}
+	return res, rows.Err()
 }
 
 func (r *ApplicationRepo) Create(ctx context.Context, a domain.EnrollmentApplication) error {
@@ -88,221 +303,6 @@ func (r *ApplicationRepo) ListByUser(ctx context.Context, userID uuid.UUID) ([]d
 			return nil, err
 		}
 		a.Status = domain.ApplicationStatus(status)
-		res = append(res, a)
-	}
-	return res, rows.Err()
-}
-
-func (r *ApplicationRepo) ListByFilter(ctx context.Context, groupID *uuid.UUID, status *string) ([]domain.EnrollmentApplication, error) {
-	// простая динамика без билдера
-	q := `
-		select id, user_id, group_id, status, comment, created_at, updated_at
-		from enrollment_applications
-		where 1=1
-	`
-	args := []any{}
-	i := 1
-	if groupID != nil {
-		q += " and group_id=$" + itoa(i)
-		args = append(args, *groupID)
-		i++
-	}
-	if status != nil {
-		q += " and status=$" + itoa(i)
-		args = append(args, *status)
-		i++
-	}
-	q += " order by created_at desc"
-
-	rows, err := r.db.Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var res []domain.EnrollmentApplication
-	for rows.Next() {
-		var a domain.EnrollmentApplication
-		var st string
-		if err := rows.Scan(&a.ID, &a.UserID, &a.GroupID, &st, &a.Comment, &a.CreatedAt, &a.UpdatedAt); err != nil {
-			return nil, err
-		}
-		a.Status = domain.ApplicationStatus(st)
-		res = append(res, a)
-	}
-	return res, rows.Err()
-}
-
-func (r *ApplicationRepo) ListByFilterView(ctx context.Context, groupID *uuid.UUID, status *string) ([]ApplicationView, error) {
-	q := `
-		select a.id, a.user_id, a.group_id, a.status, a.comment, a.created_at, a.updated_at,
-		       p.id as program_id, p.title as program_title, g.title as group_title,
-		       i.result, i.comment, i.interviewer_role, i.updated_at
-		from enrollment_applications a
-		join groups g on g.id = a.group_id
-  		join programs p on p.id = g.program_id
-		left join interviews i on i.application_id = a.id
-		where 1=1
-	`
-	args := []any{}
-	i := 1
-
-	if groupID != nil {
-		q += " and a.group_id=$" + strconv.Itoa(i)
-		args = append(args, *groupID)
-		i++
-	}
-	if status != nil {
-		q += " and a.status=$" + strconv.Itoa(i)
-		args = append(args, *status)
-		i++
-	}
-
-	q += " order by a.created_at desc"
-
-	rows, err := r.db.Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	res := make([]ApplicationView, 0)
-	for rows.Next() {
-		var a ApplicationView
-		if err := rows.Scan(
-			&a.ID, &a.UserID, &a.GroupID, &a.Status, &a.Comment, &a.CreatedAt, &a.UpdatedAt,
-			&a.ProgramID, &a.ProgramTitle, &a.GroupTitle,
-			&a.InterviewResult, &a.InterviewComment, &a.InterviewByRole, &a.InterviewAt,
-		); err != nil {
-			return nil, err
-		}
-		res = append(res, a)
-	}
-	return res, rows.Err()
-}
-
-func (r *ApplicationRepo) ListByProgramView(ctx context.Context, programID uuid.UUID, status *string) ([]ApplicationView, error) {
-	q := `
-		select a.id, a.user_id, a.group_id, a.status, a.comment, a.created_at, a.updated_at,
-		       p.id as program_id, p.title as program_title, g.title as group_title,
-		       i.result, i.comment, i.interviewer_role, i.updated_at
-		from enrollment_applications a
-		join groups g on g.id = a.group_id
-  		join programs p on p.id = g.program_id
-		left join interviews i on i.application_id = a.id
-		where g.program_id = $1
-	`
-	args := []any{programID}
-	i := 2
-
-	if status != nil {
-		q += " and a.status=$" + strconv.Itoa(i)
-		args = append(args, *status)
-		i++
-	}
-	q += " order by a.created_at desc"
-
-	rows, err := r.db.Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	res := make([]ApplicationView, 0)
-	for rows.Next() {
-		var a ApplicationView
-		if err := rows.Scan(
-			&a.ID, &a.UserID, &a.GroupID, &a.Status, &a.Comment, &a.CreatedAt, &a.UpdatedAt,
-			&a.ProgramID, &a.ProgramTitle, &a.GroupTitle,
-			&a.InterviewResult, &a.InterviewComment, &a.InterviewByRole, &a.InterviewAt,
-		); err != nil {
-			return nil, err
-		}
-		res = append(res, a)
-	}
-	return res, rows.Err()
-}
-
-func (r *ApplicationRepo) ListForTeacherByProgramView(ctx context.Context, teacherID, programID uuid.UUID, status *string) ([]ApplicationView, error) {
-	q := `
-		select a.id, a.user_id, a.group_id, a.status, a.comment, a.created_at, a.updated_at,
-		       p.id as program_id, p.title as program_title, g.title as group_title,
-		       i.result, i.comment, i.interviewer_role, i.updated_at
-		from enrollment_applications a
-		join groups g on g.id = a.group_id
-  		join programs p on p.id = g.program_id
-		join group_teachers gt on gt.group_id = g.id
-		left join interviews i on i.application_id = a.id
-		where gt.teacher_user_id = $1 and g.program_id = $2
-	`
-	args := []any{teacherID, programID}
-	i := 3
-
-	if status != nil {
-		q += " and a.status=$" + strconv.Itoa(i)
-		args = append(args, *status)
-		i++
-	}
-	q += " order by a.created_at desc"
-
-	rows, err := r.db.Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	res := make([]ApplicationView, 0)
-	for rows.Next() {
-		var a ApplicationView
-		if err := rows.Scan(
-			&a.ID, &a.UserID, &a.GroupID, &a.Status, &a.Comment, &a.CreatedAt, &a.UpdatedAt,
-			&a.ProgramID, &a.ProgramTitle, &a.GroupTitle,
-			&a.InterviewResult, &a.InterviewComment, &a.InterviewByRole, &a.InterviewAt,
-		); err != nil {
-			return nil, err
-		}
-		res = append(res, a)
-	}
-	return res, rows.Err()
-}
-
-func (r *ApplicationRepo) ListAllView(ctx context.Context, status *string) ([]ApplicationView, error) {
-	q := `
-		select a.id, a.user_id, a.group_id, a.status, a.comment, a.created_at, a.updated_at,
-		       p.id as program_id, p.title as program_title, g.title as group_title,
-		       i.result, i.comment, i.interviewer_role, i.updated_at
-		from enrollment_applications a
-	  	join groups g on g.id = a.group_id
-  		join programs p on p.id = g.program_id
-		left join interviews i on i.application_id = a.id
-		where 1=1
-	`
-	args := []any{}
-	i := 1
-
-	if status != nil {
-		q += " and a.status=$" + strconv.Itoa(i)
-		args = append(args, *status)
-		i++
-	}
-	q += " order by a.created_at desc"
-
-	rows, err := r.db.Query(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	res := make([]ApplicationView, 0)
-	for rows.Next() {
-		var a ApplicationView
-		if err := rows.Scan(
-			&a.ID, &a.UserID, &a.GroupID, &a.Status, &a.Comment, &a.CreatedAt, &a.UpdatedAt,
-			&a.ProgramID, &a.ProgramTitle, &a.GroupTitle,
-			&a.InterviewResult, &a.InterviewComment, &a.InterviewByRole, &a.InterviewAt,
-		); err != nil {
-			return nil, err
-		}
 		res = append(res, a)
 	}
 	return res, rows.Err()
