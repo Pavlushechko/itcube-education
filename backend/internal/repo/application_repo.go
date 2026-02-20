@@ -29,17 +29,16 @@ type ApplicationView struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	ProgramID    uuid.UUID
-	ProgramTitle string
-	GroupTitle   string
-
-	// NEW: для фильтра по наборам(годам)
-	CohortYear *int
-
 	InterviewResult  *string
 	InterviewComment *string
 	InterviewByRole  *string
 	InterviewAt      *time.Time
+
+	// NEW: для фильтра
+	ProgramID    uuid.UUID
+	ProgramTitle string
+	GroupTitle   string
+	CohortYear   *int
 }
 
 func NewApplicationRepo(db *pgxpool.Pool) *ApplicationRepo {

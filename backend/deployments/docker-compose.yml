@@ -1,7 +1,7 @@
-version: "3.9"
 services:
   db:
     image: postgres:16
+    container_name: education-db
     environment:
       POSTGRES_DB: education
       POSTGRES_USER: education
@@ -10,5 +10,45 @@ services:
       - "55432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U education -d education"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    image: migrate/migrate
+    container_name: education-migrate
+    depends_on:
+      db:
+        condition: service_healthy
+    # migrations у тебя в backend/internal/migrations
+    # а compose лежит в backend/deployments -> значит путь ../internal/migrations
+    volumes:
+      - ../internal/migrations:/migrations
+    command: [
+      "-path", "/migrations",
+      "-database", "postgresql://education:education@db:5432/education?sslmode=disable",
+      "up"
+    ]
+    restart: "no"
+
+  backend:
+    build:
+      # build-контекст должен быть корнем backend, а не deployments
+      context: ..
+      dockerfile: Dockerfile
+    container_name: education-backend
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      APP_PORT: "8080"
+      DATABASE_URL: postgres://education:education@db:5432/education?sslmode=disable
+    ports:
+      - "8080:8080"
+
 volumes:
   db_data:
