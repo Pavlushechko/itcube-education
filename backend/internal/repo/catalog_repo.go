@@ -438,3 +438,16 @@ func (r *CatalogRepo) GetGroupProgramID(ctx context.Context, groupID uuid.UUID) 
 	var pid uuid.UUID
 	return pid, row.Scan(&pid)
 }
+
+// course+group titles by group id
+func (r *CatalogRepo) GetGroupProgramInfo(ctx context.Context, groupID uuid.UUID) (programID uuid.UUID, programTitle string, groupTitle string, err error) {
+	row := r.db.QueryRow(ctx, `
+		select p.id, p.title, g.title
+		from groups g
+		join programs p on p.id = g.program_id
+		where g.id=$1
+	`, groupID)
+
+	err = row.Scan(&programID, &programTitle, &groupTitle)
+	return
+}

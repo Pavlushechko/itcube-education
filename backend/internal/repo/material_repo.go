@@ -63,3 +63,84 @@ func (r *MaterialRepo) Get(ctx context.Context, id uuid.UUID) (domain.Material, 
 	m.Type = domain.MaterialType(t)
 	return m, nil
 }
+
+func (r *MaterialRepo) AddFiles(ctx context.Context, materialID uuid.UUID, fileIDs []uuid.UUID) error {
+	if len(fileIDs) == 0 {
+		return nil
+	}
+
+	for _, fid := range fileIDs {
+		_, err := r.db.Exec(ctx, `
+			insert into material_files(material_id, file_id)
+			values ($1,$2)
+			on conflict do nothing
+		`, materialID, fid)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *MaterialRepo) ListFileIDs(ctx context.Context, materialID uuid.UUID) ([]uuid.UUID, error) {
+	rows, err := r.db.Query(ctx, `
+		select file_id
+		from material_files
+		where material_id=$1
+		order by created_at asc
+	`, materialID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		res = append(res, id)
+	}
+	return res, rows.Err()
+}
+
+func (r *MaterialRepo) Update(ctx context.Context, id uuid.UUID, typ *domain.MaterialType, title *string, content *string, externalURL *string) error {
+	_, err := r.db.Exec(ctx, `
+		update materials
+		set
+			type = coalesce($2, type),
+			title = coalesce($3, title),
+			content = coalesce($4, content),
+			external_url = coalesce($5, external_url)
+		where id = $1
+	`, id,
+		func() any {
+			if typ == nil {
+				return nil
+			}
+			return string(*typ)
+		}(),
+		title,
+		content,
+		externalURL,
+	)
+	return err
+}
+
+func (r *MaterialRepo) AddFile(ctx context.Context, materialID, fileID uuid.UUID) error {
+	_, err := r.db.Exec(ctx, `
+		insert into material_files(material_id, file_id)
+		values ($1,$2)
+		on conflict do nothing
+	`, materialID, fileID)
+	return err
+}
+
+func (r *MaterialRepo) RemoveFile(ctx context.Context, materialID, fileID uuid.UUID) error {
+	_, err := r.db.Exec(ctx, `
+		delete from material_files
+		where material_id=$1 and file_id=$2
+	`, materialID, fileID)
+	return err
+}

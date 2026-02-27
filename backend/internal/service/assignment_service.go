@@ -24,7 +24,7 @@ func NewAssignmentService(catalog *repo.CatalogRepo, appRepo *repo.ApplicationRe
 	return &AssignmentService{catalog: catalog, appRepo: appRepo, asgRepo: asgRepo}
 }
 
-// Create: admin OR assigned teacher (not a global role)
+// Create: admin/moderator OR assigned teacher (teacher is assignment, not global role)
 func (s *AssignmentService) Create(ctx context.Context, groupID uuid.UUID, title, desc string, dueAt *time.Time) (uuid.UUID, error) {
 	actorID, ok := auth.UserID(ctx)
 	if !ok {
@@ -32,7 +32,7 @@ func (s *AssignmentService) Create(ctx context.Context, groupID uuid.UUID, title
 	}
 	role := auth.Role(ctx)
 
-	if role != "admin" {
+	if role != "admin" && role != "moderator" {
 		assigned, err := s.catalog.IsTeacherInGroup(ctx, groupID, actorID)
 		if err != nil {
 			return uuid.Nil, err
@@ -56,8 +56,8 @@ func (s *AssignmentService) Create(ctx context.Context, groupID uuid.UUID, title
 	return a.ID, nil
 }
 
-// ListForLearner: only if enrolled
-func (s *AssignmentService) ListForLearner(ctx context.Context, groupID uuid.UUID) ([]domain.Assignment, error) {
+// ListForLearner: only if enrolled (как и было по смыслу)
+func (s *AssignmentService) ListForLearner(ctx context.Context, groupID uuid.UUID) ([]repo.AssignmentForLearnerView, error) {
 	userID, ok := auth.UserID(ctx)
 	if !ok {
 		return nil, errors.New("unauthorized")
@@ -69,5 +69,29 @@ func (s *AssignmentService) ListForLearner(ctx context.Context, groupID uuid.UUI
 	if !has {
 		return nil, ErrNoAccessToGroup
 	}
+	return s.asgRepo.ListByGroupForLearnerView(ctx, groupID, userID)
+}
+
+// ListForTeacher: staff OR assigned teacher
+func (s *AssignmentService) ListForTeacher(ctx context.Context, groupID uuid.UUID) ([]domain.Assignment, error) {
+	role := auth.Role(ctx)
+	actorID, ok := auth.UserID(ctx)
+	if !ok {
+		return nil, errors.New("unauthorized")
+	}
+
+	if role == "admin" || role == "moderator" {
+		return s.asgRepo.ListByGroup(ctx, groupID)
+	}
+
+	// teacher = назначение, role обычно "user"
+	assigned, err := s.catalog.IsTeacherInGroup(ctx, groupID, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if !assigned {
+		return nil, errors.New("forbidden")
+	}
+
 	return s.asgRepo.ListByGroup(ctx, groupID)
 }

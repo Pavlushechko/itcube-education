@@ -77,3 +77,17 @@ func (h *AssignmentHandler) ListForLearner(w http.ResponseWriter, r *http.Reques
 	}
 	writeJSON(w, http.StatusOK, as)
 }
+
+func (h *AssignmentHandler) ListForTeacher(w http.ResponseWriter, r *http.Request) {
+	gid, err := uuid.Parse(chi.URLParam(r, "groupID"))
+	if err != nil {
+		http.Error(w, "invalid group id", http.StatusBadRequest)
+		return
+	}
+	as, err := h.svc.ListForTeacher(r.Context(), gid)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+	writeJSON(w, http.StatusOK, as)
+}

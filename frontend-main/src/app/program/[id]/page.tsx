@@ -250,6 +250,11 @@ export default function ProgramPage() {
                     <Link href={`/learn/group/${g.ID}`}>Перейти в обучение</Link>
                   </div>
                 ) : null}
+                {teacherMode ? (
+                  <div style={{ marginTop: 6 }}>
+                    <Link href={`/teacher/group/${g.ID}`}>Открыть группу (преподаватель)</Link>
+                  </div>
+                ) : null}
               </li>
             )
           })}

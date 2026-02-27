@@ -20,6 +20,7 @@ type Deps struct {
 	ProgressHandler    *ProgressHandler
 	AssignmentHandler  *AssignmentHandler
 	SubmissionHandler  *SubmissionHandler
+	FilesHandler       *FilesHandler
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -32,7 +33,11 @@ func NewRouter(d Deps) http.Handler {
 	r.Use(auth.Middleware)
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
-
+	r.Route("/files", func(r chi.Router) {
+		r.Post("/upload", d.FilesHandler.Upload)
+		r.Get("/{id}/download-url", d.FilesHandler.DownloadURL)
+		r.Get("/{id}/download", d.FilesHandler.Download)
+	})
 	// Public catalog
 	r.Route("/catalog", func(r chi.Router) {
 		r.Get("/programs", d.CatalogHandler.ListPrograms)
@@ -67,7 +72,14 @@ func NewRouter(d Deps) http.Handler {
 		r.Get("/groups", d.TeacherHandler.MyGroups)
 		r.Get("/groups/{id}/applications", d.TeacherHandler.GroupApplications) //
 		r.Post("/applications/{appID}/interview", d.TeacherHandler.RecordInterview)
+		// router.go inside /teacher
+		r.Get("/groups/{groupID}/materials", d.MaterialHandler.ListForTeacher)
+		r.Get("/materials/{materialID}", d.MaterialHandler.GetPageForTeacher)
 		r.Post("/groups/{groupID}/materials", d.MaterialHandler.CreateForGroup)
+		r.Post("/materials/{materialID}/update", d.MaterialHandler.UpdateForTeacher)
+		r.Post("/materials/{materialID}/files/add", d.MaterialHandler.AddFileForTeacher)
+		r.Post("/materials/{materialID}/files/remove", d.MaterialHandler.RemoveFileForTeacher)
+		r.Get("/groups/{groupID}/assignments", d.AssignmentHandler.ListForTeacher)
 		r.Post("/groups/{groupID}/assignments", d.AssignmentHandler.CreateForGroup)
 		r.Get("/groups/{groupID}/submissions", d.SubmissionHandler.ListForTeacher)
 		r.Post("/submissions/{submissionID}/review", d.SubmissionHandler.Review)
@@ -78,11 +90,11 @@ func NewRouter(d Deps) http.Handler {
 
 	// Learner area (after enrollment)
 	r.Route("/learn", func(r chi.Router) {
+		r.Get("/groups/{groupID}", d.MaterialHandler.GroupInfo)
 		r.Get("/groups/{groupID}/materials", d.MaterialHandler.ListForLearner)
-
+		r.Get("/materials/{materialID}", d.MaterialHandler.GetPageForLearner)
 		// mark material as read
 		r.Post("/materials/{materialID}/read", d.ProgressHandler.MarkRead)
-
 		// assignments
 		r.Get("/groups/{groupID}/assignments", d.AssignmentHandler.ListForLearner)
 		r.Post("/assignments/{assignmentID}/submissions", d.SubmissionHandler.Submit)
