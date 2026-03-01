@@ -49,8 +49,6 @@ export default function LearnerMaterialPage() {
     try {
       const data = await api.learnerGetMaterialPage(materialId)
       setMat(data)
-      // отметим “прочитано” (не блокируем отображение)
-      api.markMaterialRead(materialId).catch(() => {})
     } catch (e: any) {
       setErr(e?.message || String(e))
     } finally {
@@ -114,7 +112,7 @@ export default function LearnerMaterialPage() {
                     <b>{f.original_name}</b> {f.mime_type ? `(${f.mime_type})` : ''}{' '}
                     {f.size_bytes ? `— ${fmtSize(f.size_bytes)}` : ''}
                     <div>
-                      <button onClick={() => download(f.id)}>Скачать</button>
+                      <button onClick={() => api.downloadFile(f.id)}>Скачать</button>
                     </div>
                   </li>
                 ))}

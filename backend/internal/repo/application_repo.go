@@ -163,10 +163,9 @@ func (r *ApplicationRepo) ListForTeacherByProgramView(ctx context.Context, teach
 		from enrollment_applications a
 		join groups g on g.id = a.group_id
   		join programs p on p.id = g.program_id
-		join group_teachers gt on gt.group_id = g.id
 		left join cohorts c on c.id = g.cohort_id
 		left join interviews i on i.application_id = a.id
-		where gt.teacher_user_id = $1 and g.program_id = $2
+		where g.teacher_id = $1 and g.program_id = $2
 	`
 	args := []any{teacherID, programID}
 	i := 3
@@ -417,8 +416,7 @@ func (r *ApplicationRepo) ListForTeacherByProgram(ctx context.Context, teacherID
 		select a.id, a.user_id, a.group_id, a.status, a.comment, a.created_at, a.updated_at
 		from enrollment_applications a
 		join groups g on g.id = a.group_id
-		join group_teachers gt on gt.group_id = g.id
-		where gt.teacher_user_id = $1 and g.program_id = $2
+		where g.teacher_id = $1 and g.program_id = $2
 	`
 	args := []any{teacherID, programID}
 	i := 3

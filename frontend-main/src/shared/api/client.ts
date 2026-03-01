@@ -156,9 +156,6 @@ export const api = {
   learnerGetMaterialPage: (materialId: string) =>
     request<any>(`/learn/materials/${materialId}`),
 
-  markMaterialRead: (materialId: string) =>
-    request<void>(`/learn/materials/${materialId}/read`, { method: 'POST' }),
-
   teacherUpdateMaterial: (materialId: string, body: { type?: string; title?: string; content?: string; external_url?: string | null }) =>
     request<void>(`/teacher/materials/${materialId}/update`, {
       method: 'POST',

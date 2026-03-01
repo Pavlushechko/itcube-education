@@ -76,6 +76,7 @@ export const api = {
   createGroup: (args: {
     programId: string
     cohortId: string
+    teacherUserId: string
     title: string
     capacity: number
     requiresInterview: boolean
@@ -86,6 +87,7 @@ export const api = {
       body: JSON.stringify({
         program_id: args.programId,
         cohort_id: args.cohortId,
+        teacher_user_id: args.teacherUserId,
         title: args.title,
         capacity: args.capacity,
         requires_interview: args.requiresInterview,
@@ -102,7 +104,10 @@ export const api = {
       body: JSON.stringify(patch),
     }),
 
-  assignTeacherToGroup: (groupId: string, teacherUserId: string) =>
+  getGroupTeacher: (groupId: string) =>
+    request<any>(`/admin/groups/${groupId}/teachers`),
+
+  setGroupTeacher: (groupId: string, teacherUserId: string) =>
     request<void>(`/admin/groups/${groupId}/teachers?teacher_user_id=${encodeURIComponent(teacherUserId)}`, {
       method: 'POST',
     }),

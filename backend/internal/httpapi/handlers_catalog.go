@@ -142,6 +142,7 @@ func (h *CatalogHandler) CreateCohort(w http.ResponseWriter, r *http.Request) {
 
 type createGroupReq struct {
 	ProgramID         string `json:"program_id" validate:"required,uuid"`
+	TeacherUserID     string `json:"teacher_user_id" validate:"required,uuid"`
 	CohortID          string `json:"cohort_id" validate:"required,uuid"`
 	Title             string `json:"title" validate:"required"`
 	Capacity          int    `json:"capacity" validate:"required"`
@@ -163,16 +164,18 @@ func (h *CatalogHandler) CreateGroup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
 	pid, _ := uuid.Parse(req.ProgramID)
 	cid, _ := uuid.Parse(req.CohortID)
-	id, err := h.catalog.CreateGroup(r.Context(), pid, cid, req.Title, req.Capacity, req.RequiresInterview, req.IsOpen)
+	tid, _ := uuid.Parse(req.TeacherUserID)
+
+	id, err := h.catalog.CreateGroup(r.Context(), pid, cid, tid, req.Title, req.Capacity, req.RequiresInterview, req.IsOpen)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": id.String()})
 }
-
 func (h *CatalogHandler) AssignTeacher(w http.ResponseWriter, r *http.Request) {
 	if auth.Role(r.Context()) != "admin" {
 		http.Error(w, "forbidden", http.StatusForbidden)
@@ -279,46 +282,22 @@ func (h *CatalogHandler) GetGroupTeachers(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	teachers, err := h.catalog.ListGroupTeachers(r.Context(), gid)
+	teachers, err := h.catalog.ListGroupTeachers(r.Context(), gid) // теперь 0/1
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	var teacherID *uuid.UUID
+	if len(teachers) == 1 {
+		teacherID = &teachers[0]
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"group_id": gid.String(),
-		"teachers": teachers,
+		"group_id":   gid.String(),
+		"teacher_id": teacherID, // ✅ новое (1:1)
+		"teachers":   teachers,  // ✅ старое (0/1) для совместимости
 	})
-}
-
-func (h *CatalogHandler) RemoveTeacher(w http.ResponseWriter, r *http.Request) {
-	if auth.Role(r.Context()) != "admin" {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-
-	gid, err := uuid.Parse(chi.URLParam(r, "id"))
-	if err != nil {
-		http.Error(w, "invalid group id", http.StatusBadRequest)
-		return
-	}
-
-	teacherIDStr := r.URL.Query().Get("teacher_user_id")
-	if teacherIDStr == "" {
-		http.Error(w, "teacher_user_id is required", http.StatusBadRequest)
-		return
-	}
-	tid, err := uuid.Parse(teacherIDStr)
-	if err != nil {
-		http.Error(w, "invalid teacher_user_id", http.StatusBadRequest)
-		return
-	}
-
-	if err := h.catalog.RemoveTeacherFromGroup(r.Context(), gid, tid); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 type updateGroupReq struct {

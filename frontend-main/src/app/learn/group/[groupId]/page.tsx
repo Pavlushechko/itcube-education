@@ -96,7 +96,10 @@ export default function LearnGroupPage() {
         <ul>
           {materials.map((m) => (
             <li key={m.ID}>
-              <b>{m.Title}</b> ({m.Type})
+              <Link href={`/learn/group/${groupId}/materials/${m.ID}`}>
+                {m.Title}
+              </Link>{' '}
+              ({m.Type})
             </li>
           ))}
         </ul>

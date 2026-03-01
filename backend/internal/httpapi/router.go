@@ -17,7 +17,6 @@ type Deps struct {
 	ProgramHandler     *ProgramHandler
 	TeacherHandler     *TeacherHandler
 	MaterialHandler    *MaterialHandler
-	ProgressHandler    *ProgressHandler
 	AssignmentHandler  *AssignmentHandler
 	SubmissionHandler  *SubmissionHandler
 	FilesHandler       *FilesHandler
@@ -64,7 +63,6 @@ func NewRouter(d Deps) http.Handler {
 		r.Post("/groups/{id}/close", d.CatalogHandler.CloseGroup)
 		r.Patch("/groups/{id}", d.CatalogHandler.UpdateGroup)
 		r.Patch("/programs/{id}", d.CatalogHandler.UpdateProgram)
-		r.Delete("/groups/{id}/teachers", d.CatalogHandler.RemoveTeacher)
 	})
 
 	// Teacher
@@ -93,8 +91,6 @@ func NewRouter(d Deps) http.Handler {
 		r.Get("/groups/{groupID}", d.MaterialHandler.GroupInfo)
 		r.Get("/groups/{groupID}/materials", d.MaterialHandler.ListForLearner)
 		r.Get("/materials/{materialID}", d.MaterialHandler.GetPageForLearner)
-		// mark material as read
-		r.Post("/materials/{materialID}/read", d.ProgressHandler.MarkRead)
 		// assignments
 		r.Get("/groups/{groupID}/assignments", d.AssignmentHandler.ListForLearner)
 		r.Post("/assignments/{assignmentID}/submissions", d.SubmissionHandler.Submit)

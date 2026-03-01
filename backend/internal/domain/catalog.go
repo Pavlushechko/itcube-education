@@ -27,6 +27,7 @@ type Group struct {
 	ID                uuid.UUID
 	ProgramID         uuid.UUID
 	CohortID          uuid.UUID
+	TeacherID         uuid.UUID
 	Title             string
 	Capacity          int
 	IsOpen            bool

@@ -59,15 +59,12 @@ func main() {
 	matSvc := service.NewMaterialService(matRepo, appRepo, catalogRepo, fileRepo)
 	matHandler := httpapi.NewMaterialHandler(matSvc)
 
-	progressRepo := repo.NewProgressRepo(pool)
 	asgRepo := repo.NewAssignmentRepo(pool)
 	subRepo := repo.NewSubmissionRepo(pool)
 
-	progressSvc := service.NewProgressService(progressRepo, matRepo, appRepo)
 	asgSvc := service.NewAssignmentService(catalogRepo, appRepo, asgRepo)
 	subSvc := service.NewSubmissionService(catalogRepo, appRepo, asgRepo, subRepo)
 
-	progressHandler := httpapi.NewProgressHandler(progressSvc)
 	asgHandler := httpapi.NewAssignmentHandler(asgSvc)
 	subHandler := httpapi.NewSubmissionHandler(subSvc)
 
@@ -107,10 +104,9 @@ func main() {
 		ProgramHandler:     programHandler,
 		TeacherHandler:     teacherHandler,
 		MaterialHandler:    matHandler,
-		ProgressHandler:    progressHandler,
 		AssignmentHandler:  asgHandler,
 		SubmissionHandler:  subHandler,
-		FilesHandler:       filesHandler, // ✅ ВОТ ЭТО ДОБАВИТЬ
+		FilesHandler:       filesHandler,
 	})
 
 	addr := ":" + cfg.AppPort
